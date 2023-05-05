@@ -1,0 +1,19 @@
+#include "board.h"
+
+int main(void)
+{
+	setFrameScore(1, 1, 9);
+	setFrameScore(1, 2, 0);
+	setFrameScore(2, 1, 10);
+	setFrameScore(9, 1, 9);
+	setFrameScore(9, 2, 1);
+	setFrameScore(10, 1, 0);
+	setFrameScore(10, 2, 10);
+	setFrameScore(10, 3, 10);
+	
+	setScore(1, 20);
+	setScore(10, 150);
+	
+	printBoard();	
+	return 0;
+}

@@ -1,0 +1,24 @@
+#ifndef STACK_H
+#define STACK_H
+
+#include<stdio.h>
+#include<stdlib.h>
+#include<assert.h>
+#include<string.h>
+
+typedef struct stack{
+    //int *pArr;
+    void *pArr;
+    int eleSize;
+
+    int size;
+    int tos;
+} Stack;
+
+void initStack(Stack *ps, int size, int eleSize);
+void cleanupStack(Stack *ps);
+
+void push(Stack *ps, const void *pData);
+void pop(Stack *ps, void *pData);
+
+#endif
