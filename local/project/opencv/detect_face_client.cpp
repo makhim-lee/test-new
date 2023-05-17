@@ -69,3 +69,13 @@ void test_test() {
     socket.close();
     getchar();
 }
+/* capture 
+static void png_capture(auto&frame){
+	std::vector<int> compression_params;
+	compression_params.push_back(cv::IMWRITE_PNG_COMPRESSION);
+	compression_params.push_back(0);
+	
+	cv::imwrite("face.png", frame, compression_params);
+	cam.release();
+}
+*/
