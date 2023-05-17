@@ -44,5 +44,6 @@
         "stdexcept": "cpp",
         "streambuf": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "/mnt/d/gitcloud/local/HDR__/cpp2/vector"
 }
