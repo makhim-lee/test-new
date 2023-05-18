@@ -1,9 +1,8 @@
 #include <boost/asio.hpp>
 #include <iostream>
- 
+#include <unistd.h>
 #include <opencv2/opencv.hpp>
 #include <thread>
-
 #pragma warning (disable : 4996)
  
 constexpr char SERVER_IP[] = "127.0.0.1";
@@ -23,23 +22,26 @@ void test_test() {
  
     if (connect_error) {
         std::cout << "error No: " << connect_error.value()<< "->" << connect_error.message() << std::endl;
-    }
-//dnn_face set
+	}
+		//dnn_face set
 	cv::VideoCapture capture(-1, cv::CAP_V4L2);
 	if(!capture.isOpened()) return;
-	cv::dnn::Net net = cv::dnn::readNet(model, config);
+	cv::dnn::Net net = cv::dnn::readNet(model, config);//딥러닝 load
 	if(net.empty()) return;
 	
 	cv::Mat frame;
 	cv::namedWindow("frame");
-    
+	int flag = 0; 
     while (1) 
     {
 		capture>>frame;
 		cv::Mat blob = cv::dnn::blobFromImage(frame, 1, cv::Size(300,300),cv::Scalar(104,177,123));
-		net.setInput(blob);//input
-		cv::Mat result = net.forward(); 
+		net.setInput(blob);//input 신경망 
+		cv::Mat result = net.forward(); //탐지 결과 저장
 		cv::Mat detect(result.size[2], result.size[3], CV_32FC1, result.ptr<float>());
+		//float CONFIDENCE = detect.at<float>(0, 2);
+		std::thread send_mass(send_mass, detect.at<float>(0,2), flag);
+		if(!send_mass.joinable()) send_mass.join();
 
 		for (int i = 0; i < detect.rows; ++i) {
 			float CONFIDENCE = detect.at<float>(i,2); // column 2
@@ -55,27 +57,30 @@ void test_test() {
 			cv::String label = cv::format("Face : %5.3f", CONFIDENCE);
 			cv::putText(frame, label, cv::Point(x1,y1-1), \
 					cv::FONT_HERSHEY_COMPLEX, 0.8, cv::Scalar(0,255,0));
-			if (CONFIDENCE > 0.98){
-				std::string message = "myface";
-       			boost::system::error_code ignored_error;
-        		socket.write_some(boost::asio::buffer(message, message.size()), ignored_error);
-        		std::cout << "Sent Message: " << message << std::endl;
-			}
 		}
 		cv::imshow("frame", frame);
-		if(cv::waitKey(1) == 27) break; 
+		if(cv::waitKey(1) == 27){ 
+			cv::destroyAllWindows();
+    		socket.close();
+    		getchar();
+			return; 
+		}
     }
-	cv::destroyAllWindows();
-    socket.close();
-    getchar();
 }
-/* capture 
-static void png_capture(auto&frame){
-	std::vector<int> compression_params;
-	compression_params.push_back(cv::IMWRITE_PNG_COMPRESSION);
-	compression_params.push_back(0);
-	
-	cv::imwrite("face.png", frame, compression_params);
-	cam.release();
+
+void send_mass(const float CONFIDENCE, int& flag){
+	if(CONFIDENCE > 0.9 && flag ==0) {
+		std::cout << "Detected " << std::endl;
+		flag = 1;
+		std::string message = "myface";
+      	boost::system::error_code ignored_error;
+        socket.write_some(boost::asio::buffer(message, message.size()), ignored_error);
+        std::cout << "Sent Message: " << message << std::endl;
+		sleep(5);
+	}else if(CONFIDENCE < 0.5 && flag == 1){
+			std::cout <<"not Detected"<<std::endl;
+		flag = 0;
+	}
 }
-*/
+
+
