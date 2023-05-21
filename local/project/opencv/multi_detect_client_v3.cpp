@@ -6,6 +6,7 @@
 #include <chrono>
 #include <csignal>
 #include <unistd.h>
+#include <queue>
 
 constexpr char SERVER_IP[] = "127.0.0.1";
 constexpr unsigned short PORT_NUMBER = 9999;
@@ -15,7 +16,7 @@ static const cv::String config = "deploy.prototxt";
 std::atomic_bool exitFlag(false);
 std::atomic_bool bool_confidence(false);
 
-cv::Mat _frame;
+std::queue<cv::Mat> Queue_frame;
 
 std::mutex mutex;
 std::condition_variable condVar;
@@ -54,9 +55,10 @@ void detect_face_thread() {
             label = cv::format("Face : %5.3f", CONFIDENCE);
             cv::putText(frame, label, cv::Point(x1,y1-1), cv::FONT_HERSHEY_COMPLEX, 0.8, cv::Scalar(0,255,0));
         
-            //std::unique_lock<std::mutex> lock(mutex); 
-            _frame = frame.clone();
-            //lock.unlock();
+            //std::unique_lock<std::mutex> lock(mutex);
+            Queue_frame.push(frame.clone()); 
+            //lock.unlock(); 
+            
         }
 
         if(bool_confidence != local_confidence){
@@ -105,12 +107,12 @@ void show_window_thread(){
     cv::imshow("frame", standby);
     while (!exitFlag.load()) {
         if(cv::waitKey(1) == 27) break; 
-
-		if(bool_confidence) {
-            //std::unique_lock<std::mutex> lock(mutex);
-			cv::imshow("frame", _frame);
+        //std::unique_lock<std::mutex> lock(mutex);
+		if(bool_confidence && !Queue_frame.empty()) {
+			cv::imshow("frame", Queue_frame.front());
+			Queue_frame.pop();
             //lock.unlock();
-			changeWindow = false;
+            changeWindow = false;
 		}else if(!(bool_confidence || changeWindow)) {
 			cv::imshow("frame", standby);
 			changeWindow = true;

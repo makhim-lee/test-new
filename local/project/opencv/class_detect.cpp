@@ -1,26 +1,6 @@
-#include <boost/asio.hpp>
-#include <opencv2/opencv.hpp>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <chrono>
-#include <csignal>
-#include <unistd.h>
+#include"detect_h.h"
 
-constexpr char SERVER_IP[] = "127.0.0.1";
-constexpr unsigned short PORT_NUMBER = 9999;
-
-static const cv::String model = "res10_300x300_ssd_iter_140000_fp16.caffemodel";
-static const cv::String config = "deploy.prototxt";
-std::atomic_bool exitFlag(false);
-std::atomic_bool bool_confidence(false);
-
-cv::Mat _frame;
-
-std::mutex mutex;
-std::condition_variable condVar;
-
-void detect_face_thread() {
+void FaceDetec::detect_face_thread() {
     cv::VideoCapture capture(-1, cv::CAP_V4L2);
     capture.set(cv::CAP_PROP_FPS, 30);
     if(!capture.isOpened()) return;
@@ -29,7 +9,7 @@ void detect_face_thread() {
 	
     cv::Mat frame, blob, result;
     float CONFIDENCE;
-    bool local_confidence = false;
+    bool local_bool_confidence = false;
     cv::String label; 
     
     while (!exitFlag.load()) 
@@ -42,9 +22,9 @@ void detect_face_thread() {
         
         CONFIDENCE = detect.at<float>(0,2);
         if(CONFIDENCE < 0.7){
-            local_confidence = false;
+            local_bool_confidence = false;
         }else{
-            local_confidence = true;
+            local_bool_confidence = true;
             
             int x1 = cvRound(detect.at<float>(0, 3)* frame.cols);
             int y1 = cvRound(detect.at<float>(0, 4)* frame.rows);
@@ -54,19 +34,19 @@ void detect_face_thread() {
             label = cv::format("Face : %5.3f", CONFIDENCE);
             cv::putText(frame, label, cv::Point(x1,y1-1), cv::FONT_HERSHEY_COMPLEX, 0.8, cv::Scalar(0,255,0));
         
-            //std::unique_lock<std::mutex> lock(mutex); 
-            _frame = frame.clone();
-            //lock.unlock();
+            //std::unique_lock<std::mutex> lock(mutex);
+            Queue_frame.push(frame.clone()); 
+            //lock.unlock(); 
         }
 
-        if(bool_confidence != local_confidence){
+        if(bool_confidence != local_bool_confidence){
             bool_confidence = !bool_confidence;
             condVar.notify_all();
         }
     }
 }
 
-void send_mass_thread(){
+void FaceDetec::send_mass_thread(){
     boost::asio::io_service io_service;
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(SERVER_IP),PORT_NUMBER);
     boost::system::error_code connect_error;
@@ -98,17 +78,17 @@ void send_mass_thread(){
     socket.close();
 }
 
-void show_window_thread(){
+void FaceDetec::show_window_thread(){
 	cv::Mat standby = cv::imread("standby.png");
 	bool changeWindow = false;
 	cv::namedWindow("frame");
     cv::imshow("frame", standby);
     while (!exitFlag.load()) {
         if(cv::waitKey(1) == 27) break; 
-
+        //std::unique_lock<std::mutex> lock(mutex);
 		if(bool_confidence) {
-            //std::unique_lock<std::mutex> lock(mutex);
-			cv::imshow("frame", _frame);
+			cv::imshow("frame", Queue_frame.front());
+			Queue_frame.pop();
             //lock.unlock();
 			changeWindow = false;
 		}else if(!(bool_confidence || changeWindow)) {
@@ -118,24 +98,4 @@ void show_window_thread(){
     }
     cv::destroyAllWindows();
     exitFlag = true;
-}
-void detcet_main(){
-
-    std::signal(SIGINT, [](int signal) {
-        if (signal == SIGINT) {
-            exitFlag = true;
-            condVar.notify_all();
-        }
-    });
-	
-    std::thread send_mass(send_mass_thread);
-	std::thread detect_face(detect_face_thread);
-    std::thread show_window(show_window_thread);
-    try {
-        show_window.join();
-        detect_face.join();
-        send_mass.join();
-    } catch(const std::exception& e) {
-        std::cout << e.what() << std::endl;
-    }
 }
